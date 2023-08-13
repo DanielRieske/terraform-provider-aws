@@ -71,6 +71,14 @@ func (p *servicePackage) SDKResources(ctx context.Context) []*types.ServicePacka
 			TypeName: "aws_iot_role_alias",
 		},
 		{
+			Factory:  ResourceSoftwarePackage,
+			TypeName: "aws_iot_software_package",
+			Name:     "Software Package",
+			Tags: &types.ServicePackageResourceTags{
+				IdentifierAttribute: "package_arn",
+			},
+		},
+		{
 			Factory:  ResourceThing,
 			TypeName: "aws_iot_thing",
 		},
