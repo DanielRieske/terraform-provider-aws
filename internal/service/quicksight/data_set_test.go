@@ -534,6 +534,79 @@ func TestAccQuickSightDataSet_noPhysicalTableMap(t *testing.T) {
 	})
 }
 
+func TestAccQuickSightDataSet_DataSetParameters(t *testing.T) {
+	ctx := acctest.Context(t)
+	var dataSet quicksight.DataSet
+	resourceName := "aws_quicksight_data_set.test"
+	rName := sdkacctest.RandomWithPrefix(acctest.ResourcePrefix)
+	rId := sdkacctest.RandomWithPrefix(acctest.ResourcePrefix)
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(ctx, t) },
+		ErrorCheck:               acctest.ErrorCheck(t, quicksight.EndpointsID),
+		ProtoV5ProviderFactories: acctest.ProtoV5ProviderFactories,
+		CheckDestroy:             testAccCheckDataSetDestroy(ctx),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccDataSetParametersBase(rId, rName),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckDataSetExists(ctx, resourceName, &dataSet),
+				),
+			},
+			{
+				ResourceName:      resourceName,
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+			{
+				Config: testAccDataSetParameters_addDateTimeParameters(rId, rName),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckDataSetExists(ctx, resourceName, &dataSet),
+					resource.TestCheckResourceAttr(resourceName, "data_set_parameters.0.date_time_data_set_parameter.0.id", "exampleDateTimeId"),
+					resource.TestCheckResourceAttr(resourceName, "data_set_parameters.0.date_time_data_set_parameter.0.name", "exampleDateTimeName"),
+					resource.TestCheckResourceAttr(resourceName, "data_set_parameters.0.date_time_data_set_parameter.0.value_type", "SINGLE_VALUED"),
+					resource.TestCheckResourceAttr(resourceName, "data_set_parameters.0.date_time_data_set_parameter.0.time_granularity", "DAY"),
+					resource.TestCheckResourceAttr(resourceName, "data_set_parameters.0.date_time_data_set_parameter.0.default_values.#", "1"),
+					resource.TestCheckResourceAttr(resourceName, "data_set_parameters.0.date_time_data_set_parameter.0.default_values.0.static_values.#", "1"),
+				),
+			},
+			{
+				Config: testAccDataSetParameters_addDecimalParameters(rId, rName),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckDataSetExists(ctx, resourceName, &dataSet),
+					resource.TestCheckResourceAttr(resourceName, "data_set_parameters.0.decimal_data_set_parameter.0.id", "exampleDecimalId"),
+					resource.TestCheckResourceAttr(resourceName, "data_set_parameters.0.decimal_data_set_parameter.0.name", "exampleDecimalName"),
+					resource.TestCheckResourceAttr(resourceName, "data_set_parameters.0.decimal_data_set_parameter.0.value_type", "SINGLE_VALUED"),
+					resource.TestCheckResourceAttr(resourceName, "data_set_parameters.0.decimal_data_set_parameter.0.default_values.#", "1"),
+					resource.TestCheckResourceAttr(resourceName, "data_set_parameters.0.decimal_data_set_parameter.0.default_values.0.static_values.#", "1"),
+				),
+			},
+			{
+				Config: testAccDataSetParameters_addIntegerParameters(rId, rName),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckDataSetExists(ctx, resourceName, &dataSet),
+					resource.TestCheckResourceAttr(resourceName, "data_set_parameters.0.integer_data_set_parameter.0.id", "exampleIntegerName"),
+					resource.TestCheckResourceAttr(resourceName, "data_set_parameters.0.integer_data_set_parameter.0.name", "exampleIntegerName"),
+					resource.TestCheckResourceAttr(resourceName, "data_set_parameters.0.integer_data_set_parameter.0.value_type", "SINGLE_VALUED"),
+					resource.TestCheckResourceAttr(resourceName, "data_set_parameters.0.integer_data_set_parameter.0.default_values.#", "1"),
+					resource.TestCheckResourceAttr(resourceName, "data_set_parameters.0.integer_data_set_parameter.0.default_values.0.static_values.#", "1"),
+				),
+			},
+			{
+				Config: testAccDataSetParameters_addStringParameters(rId, rName),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckDataSetExists(ctx, resourceName, &dataSet),
+					resource.TestCheckResourceAttr(resourceName, "data_set_parameters.0.string_data_set_parameter.id", "exampleStringName"),
+					resource.TestCheckResourceAttr(resourceName, "data_set_parameters.0.string_data_set_parameter.name", "exampleStringName"),
+					resource.TestCheckResourceAttr(resourceName, "data_set_parameters.0.string_data_set_parameter.value_type", "SINGLE_VALUED"),
+					resource.TestCheckResourceAttr(resourceName, "data_set_parameters.0.string_data_set_parameter.0.default_values.#", "1"),
+					resource.TestCheckResourceAttr(resourceName, "data_set_parameters.0.string_data_set_parameter.default_values.0.static_values.#", "1"),
+				),
+			},
+		},
+	})
+}
+
 func testAccCheckDataSetExists(ctx context.Context, resourceName string, dataSet *quicksight.DataSet) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		rs, ok := s.RootModule().Resources[resourceName]
@@ -1231,6 +1304,232 @@ resource "aws_quicksight_data_set" "test" {
         right_operand = "right"
         type          = "INNER"
         on_clause     = "Column1 = Column2"
+      }
+    }
+  }
+}
+`, rId, rName))
+}
+
+func testAccDataSetParametersBase(rId, rName string) string {
+	return acctest.ConfigCompose(
+		testAccDataSetConfigBase(rId, rName),
+		fmt.Sprintf(`
+resource "aws_quicksight_data_set" "test" {
+  data_set_id = %[1]q
+  name        = %[2]q
+  import_mode = "SPICE"
+
+  physical_table_map {
+    physical_table_map_id = %[1]q
+    s3_source {
+      data_source_arn = aws_quicksight_data_source.test.arn
+      input_columns {
+        name = "Column1"
+        type = "STRING"
+      }
+      upload_settings {
+        format = "JSON"
+      }
+    }
+  }
+}
+`, rId, rName))
+}
+
+func testAccDataSetParameters_addDateTimeParameters(rId, rName string) string {
+	return acctest.ConfigCompose(
+		testAccDataSetConfigBase(rId, rName),
+		fmt.Sprintf(`
+resource "aws_quicksight_data_set" "test" {
+  data_set_id = %[1]q
+  name        = %[2]q
+  import_mode = "SPICE"
+
+  data_set_parameters {
+    date_time_data_set_parameter {
+      id               = "exampleDateTimeId"
+      name             = "exampleDateTimeName"
+      value_type       = "SINGLE_VALUED"
+      time_granularity = "DAY"
+      default_values {
+        static_values = ["2006-01-02T15:04:05Z"]
+      }
+    }
+  }
+
+  physical_table_map {
+    physical_table_map_id = %[1]q
+    s3_source {
+      data_source_arn = aws_quicksight_data_source.test.arn
+      input_columns {
+        name = "Column1"
+        type = "STRING"
+      }
+      upload_settings {
+        format = "JSON"
+      }
+    }
+  }
+}
+`, rId, rName))
+}
+
+func testAccDataSetParameters_addDecimalParameters(rId, rName string) string {
+	return acctest.ConfigCompose(
+		testAccDataSetConfigBase(rId, rName),
+		fmt.Sprintf(`
+resource "aws_quicksight_data_set" "test" {
+  data_set_id = %[1]q
+  name        = %[2]q
+  import_mode = "SPICE"
+
+  data_set_parameters {
+    date_time_data_set_parameter {
+      id               = "exampleDateTimeId"
+      name             = "exampleDateTimeName"
+      value_type       = "SINGLE_VALUED"
+      time_granularity = "DAY"
+      default_values {
+        static_values = ["2006-01-02T15:04:05Z"]
+      }
+    }
+    decimal_data_set_parameter {
+      id         = "exampleDecimalId"
+      name       = "exampleDecimalName"
+      value_type = "SINGLE_VALUED"
+      default_values {
+        static_values = [1.5]
+      }
+    }
+  }
+
+  physical_table_map {
+    physical_table_map_id = %[1]q
+    s3_source {
+      data_source_arn = aws_quicksight_data_source.test.arn
+      input_columns {
+        name = "Column1"
+        type = "STRING"
+      }
+      upload_settings {
+        format = "JSON"
+      }
+    }
+  }
+}
+`, rId, rName))
+}
+
+func testAccDataSetParameters_addIntegerParameters(rId, rName string) string {
+	return acctest.ConfigCompose(
+		testAccDataSetConfigBase(rId, rName),
+		fmt.Sprintf(`
+resource "aws_quicksight_data_set" "test" {
+  data_set_id = %[1]q
+  name        = %[2]q
+  import_mode = "SPICE"
+
+  data_set_parameters {
+    date_time_data_set_parameter {
+      id               = "exampleDateTimeId"
+      name             = "exampleDateTimeName"
+      value_type       = "SINGLE_VALUED"
+      time_granularity = "DAY"
+      default_values {
+        static_values = ["2006-01-02T15:04:05Z"]
+      }
+    }
+    decimal_data_set_parameter {
+      id         = "exampleDecimalId"
+      name       = "exampleDecimalName"
+      value_type = "SINGLE_VALUED"
+      default_values {
+        static_values = [1.5]
+      }
+    }
+    integer_data_set_parameter {
+      id         = "exampleIntegerId"
+      name       = "exampleIntegerName"
+      value_type = "SINGLE_VALUED"
+      default_values {
+        static_values = [1]
+      }
+    }
+  }
+
+  physical_table_map {
+    physical_table_map_id = %[1]q
+    s3_source {
+      data_source_arn = aws_quicksight_data_source.test.arn
+      input_columns {
+        name = "Column1"
+        type = "STRING"
+      }
+      upload_settings {
+        format = "JSON"
+      }
+    }
+  }
+}
+`, rId, rName))
+}
+
+func testAccDataSetParameters_addStringParameters(rId, rName string) string {
+	return acctest.ConfigCompose(
+		testAccDataSetConfigBase(rId, rName),
+		fmt.Sprintf(`
+resource "aws_quicksight_data_set" "test" {
+  data_set_id = %[1]q
+  name        = %[2]q
+  import_mode = "SPICE"
+
+  data_set_parameters {
+    date_time_data_set_parameter {
+      id               = "exampleDateTimeId"
+      name             = "exampleDateTimeName"
+      value_type       = "SINGLE_VALUED"
+      time_granularity = "DAY"
+      default_values {
+        static_values = ["2006-01-02T15:04:05Z"]
+      }
+    }
+    decimal_data_set_parameter {
+      id         = "exampleDecimalId"
+      name       = "exampleDecimalName"
+      value_type = "SINGLE_VALUED"
+      default_values {
+        static_values = [1.5]
+      }
+    }
+    integer_data_set_parameter {
+      id         = "exampleIntegerId"
+      name       = "exampleIntegerName"
+      value_type = "SINGLE_VALUED"
+      default_values {
+        static_values = [1]
+      }
+    }
+    string_data_set_parameter {
+      id         = "exampleStringId"
+      name       = "exampleStringName"
+      value_type = "SINGLE_VALUED"
+      default_values {
+        static_values = ["foo"]
+      }
+    }
+  }
+
+  physical_table_map {
+    physical_table_map_id = %[1]q
+    s3_source {
+      data_source_arn = aws_quicksight_data_source.test.arn
+      input_columns {
+        name = "Column1"
+        type = "STRING"
+      }
+      upload_settings {
+        format = "JSON"
       }
     }
   }
