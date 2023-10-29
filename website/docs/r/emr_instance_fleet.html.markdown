@@ -101,6 +101,7 @@ The launch specification for On-Demand instances in the instance fleet, which de
 The instance fleet configuration is available only in Amazon EMR versions 4.8.0 and later, excluding 5.0.x versions. On-Demand instances allocation strategy is available in Amazon EMR version 5.12.1 and later.
 
 * `allocation_strategy` - (Required) Specifies the strategy to use in launching On-Demand instance fleets. Currently, the only option is `lowest-price` (the default), which launches the lowest price first.
+* `capacity_reservation_options` - (Optional) Configuration block for the capacity reservation options
 
 ## spot_specification  Configuration Block
 
@@ -110,6 +111,14 @@ The launch specification for Spot instances in the fleet, which determines the d
 * `block_duration_minutes` - (Optional) The defined duration for Spot instances (also known as Spot blocks) in minutes. When specified, the Spot instance does not terminate before the defined duration expires, and defined duration pricing for Spot instances applies. Valid values are 60, 120, 180, 240, 300, or 360. The duration period starts as soon as a Spot instance receives its instance ID. At the end of the duration, Amazon EC2 marks the Spot instance for termination and provides a Spot instance termination notice, which gives the instance a two-minute warning before it terminates.
 * `timeout_action` - (Required) The action to take when TargetSpotCapacity has not been fulfilled when the TimeoutDurationMinutes has expired; that is, when all Spot instances could not be provisioned within the Spot provisioning timeout. Valid values are `TERMINATE_CLUSTER` and `SWITCH_TO_ON_DEMAND`. SWITCH_TO_ON_DEMAND specifies that if no Spot instances are available, On-Demand Instances should be provisioned to fulfill any remaining Spot capacity.
 * `timeout_duration_minutes` - (Required) The spot provisioning timeout period in minutes. If Spot instances are not provisioned within this time period, the TimeOutAction is taken. Minimum value is 5 and maximum value is 1440. The timeout applies only during initial provisioning, when the cluster is first created.
+
+## capacity_reservation_options  Configuration Block
+
+The launch specification for On-Demand instances in the instance fleet, which determines the allocation strategy.
+
+* `capacity_reservation_preference` - (Required) Specifies the instance's Capacity Reservation preferences. Possible preferences include: `open` and `none`
+* `capacity_reservation_resource_group_arn` - (Required) The ARN of the Capacity Reservation resource group in which to run the instance.
+* `usage_strategy` - (Optional) Specifies whether to use unused Capacity Reservations for fulfilling On-Demand capacity. If you specify `use-capacity-reservations-first`, the fleet uses unused Capacity Reservations to fulfill On-Demand capacity up to the target On-Demand capacity. If you do not specify a value, the fleet fulfills the On-Demand capacity according to the chosen On-Demand allocation strategy.
 
 ## Attribute Reference
 

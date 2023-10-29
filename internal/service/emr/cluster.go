@@ -687,8 +687,7 @@ func instanceFleetConfigSchema() *schema.Resource {
 						"on_demand_specification": {
 							Type:     schema.TypeList,
 							Optional: true,
-							ForceNew: true,
-							MinItems: 1,
+							MaxItems: 1,
 							Elem: &schema.Resource{
 								Schema: map[string]*schema.Schema{
 									"allocation_strategy": {
@@ -696,6 +695,35 @@ func instanceFleetConfigSchema() *schema.Resource {
 										Required:     true,
 										ForceNew:     true,
 										ValidateFunc: validation.StringInSlice(emr.OnDemandProvisioningAllocationStrategy_Values(), false),
+									},
+									"capacity_reservation_options": {
+										Type:     schema.TypeList,
+										Optional: true,
+										ForceNew: true,
+										MaxItems: 1,
+										Elem: &schema.Resource{
+											Schema: map[string]*schema.Schema{
+												"capacity_reservation_preference": {
+													Type:             schema.TypeString,
+													Optional:         true,
+													ForceNew:         true,
+													DiffSuppressFunc: suppressIfCapacityReservationOptionIs(emr.OnDemandCapacityReservationPreferenceOpen),
+													ValidateFunc:     validation.StringInSlice(emr.OnDemandCapacityReservationPreference_Values(), false),
+												},
+												"capacity_reservation_resource_group_arn": {
+													Type:         schema.TypeString,
+													Optional:     true,
+													ForceNew:     true,
+													ValidateFunc: verify.ValidARN,
+												},
+												"usage_strategy": {
+													Type:         schema.TypeString,
+													Optional:     true,
+													ForceNew:     true,
+													ValidateFunc: validation.StringInSlice(emr.OnDemandCapacityReservationUsageStrategy_Values(), false),
+												},
+											},
+										},
 									},
 								},
 							},
@@ -2081,12 +2109,18 @@ func flattenOnDemandSpecification(onDemandSpecification *emr.OnDemandProvisionin
 	if onDemandSpecification == nil {
 		return []interface{}{}
 	}
-	m := map[string]interface{}{
+	tfMap := map[string]interface{}{}
+	if onDemandSpecification.AllocationStrategy != nil {
 		// The return value from api is wrong. it return "LOWEST_PRICE" instead of "lowest-price"
 		// "allocation_strategy": aws.StringValue(onDemandSpecification.AllocationStrategy),
-		"allocation_strategy": emr.OnDemandProvisioningAllocationStrategyLowestPrice,
+		tfMap["allocation_strategy"] = emr.OnDemandProvisioningAllocationStrategyLowestPrice
 	}
-	return []interface{}{m}
+
+	if onDemandSpecification.CapacityReservationOptions != nil {
+		tfMap["capacity_reservation_options"] = flattenCapacityReservationOptions(onDemandSpecification.CapacityReservationOptions)
+	}
+
+	return []interface{}{tfMap}
 }
 
 func flattenSpotSpecification(spotSpecification *emr.SpotProvisioningSpecification) []interface{} {
@@ -2106,6 +2140,18 @@ func flattenSpotSpecification(spotSpecification *emr.SpotProvisioningSpecificati
 		m["allocation_strategy"] = emr.SpotProvisioningAllocationStrategyCapacityOptimized
 	}
 
+	return []interface{}{m}
+}
+
+func flattenCapacityReservationOptions(capacityReservationOptions *emr.OnDemandCapacityReservationOptions) []interface{} {
+	if capacityReservationOptions == nil {
+		return []interface{}{}
+	}
+	m := map[string]interface{}{
+		"capacity_reservation_preference":         aws.StringValue(capacityReservationOptions.CapacityReservationPreference),
+		"capacity_reservation_resource_group_arn": aws.StringValue(capacityReservationOptions.CapacityReservationResourceGroupArn),
+		"usage_strategy":                          aws.StringValue(capacityReservationOptions.UsageStrategy),
+	}
 	return []interface{}{m}
 }
 
@@ -2179,7 +2225,8 @@ func expandLaunchSpecification(launchSpecification map[string]interface{}) *emr.
 
 	if len(onDemandSpecification) > 0 {
 		fleetSpecification.OnDemandSpecification = &emr.OnDemandProvisioningSpecification{
-			AllocationStrategy: aws.String(onDemandSpecification[0].(map[string]interface{})["allocation_strategy"].(string)),
+			AllocationStrategy:         aws.String(onDemandSpecification[0].(map[string]interface{})["allocation_strategy"].(string)),
+			CapacityReservationOptions: expandCapacityReservationOptions(onDemandSpecification[0].(map[string]interface{})["capacity_reservation_options"].([]interface{})),
 		}
 	}
 
@@ -2230,6 +2277,33 @@ func expandConfigurations(configurations []interface{}) []*emr.Configuration {
 	}
 
 	return configsOut
+}
+
+func expandCapacityReservationOptions(tfList []interface{}) *emr.OnDemandCapacityReservationOptions {
+	if len(tfList) == 0 || tfList[0] == nil {
+		return nil
+	}
+
+	tfMap, ok := tfList[0].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+
+	options := &emr.OnDemandCapacityReservationOptions{}
+
+	if v, ok := tfMap["capacity_reservation_preference"].(string); ok && v != "" {
+		options.CapacityReservationPreference = aws.String(v)
+	}
+
+	if v, ok := tfMap["capacity_reservation_resource_group_arn"].(string); ok && v != "" {
+		options.CapacityReservationResourceGroupArn = aws.String(v)
+	}
+
+	if v, ok := tfMap["usage_strategy"].(string); ok && v != "" {
+		options.UsageStrategy = aws.String(v)
+	}
+
+	return options
 }
 
 func resourceInstanceTypeHashConfig(v interface{}) int {

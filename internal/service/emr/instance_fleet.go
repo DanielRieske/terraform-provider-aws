@@ -20,6 +20,7 @@ import (
 	"github.com/hashicorp/terraform-provider-aws/internal/conns"
 	"github.com/hashicorp/terraform-provider-aws/internal/errs/sdkdiag"
 	"github.com/hashicorp/terraform-provider-aws/internal/tfresource"
+	"github.com/hashicorp/terraform-provider-aws/internal/verify"
 )
 
 // @SDKResource("aws_emr_instance_fleet")
@@ -146,7 +147,7 @@ func ResourceInstanceFleet() *schema.Resource {
 							Type:     schema.TypeList,
 							Optional: true,
 							ForceNew: true,
-							MinItems: 1,
+							MaxItems: 1,
 							Elem: &schema.Resource{
 								Schema: map[string]*schema.Schema{
 									"allocation_strategy": {
@@ -154,6 +155,34 @@ func ResourceInstanceFleet() *schema.Resource {
 										Required:     true,
 										ForceNew:     true,
 										ValidateFunc: validation.StringInSlice(emr.OnDemandProvisioningAllocationStrategy_Values(), false),
+									},
+									"capacity_reservation_options": {
+										Type:     schema.TypeList,
+										Optional: true,
+										MaxItems: 1,
+										Elem: &schema.Resource{
+											Schema: map[string]*schema.Schema{
+												"capacity_reservation_preference": {
+													Type:             schema.TypeString,
+													Optional:         true,
+													ForceNew:         true,
+													DiffSuppressFunc: suppressIfCapacityReservationOptionIs(emr.OnDemandCapacityReservationPreferenceOpen),
+													ValidateFunc:     validation.StringInSlice(emr.OnDemandCapacityReservationPreference_Values(), false),
+												},
+												"capacity_reservation_resource_group_arn": {
+													Type:         schema.TypeString,
+													Optional:     true,
+													ForceNew:     true,
+													ValidateFunc: verify.ValidARN,
+												},
+												"usage_strategy": {
+													Type:         schema.TypeString,
+													Optional:     true,
+													ForceNew:     true,
+													ValidateFunc: validation.StringInSlice(emr.OnDemandCapacityReservationUsageStrategy_Values(), false),
+												},
+											},
+										},
 									},
 								},
 							},
@@ -237,7 +266,11 @@ func resourceInstanceFleetCreate(ctx context.Context, d *schema.ResourceData, me
 		InstanceFleet: readInstanceFleetConfig(taskFleet, emr.InstanceFleetTypeTask),
 	}
 
+	fmt.Printf("Reached create with input: %+v\n", input)
+
 	output, err := conn.AddInstanceFleetWithContext(ctx, input)
+
+	fmt.Printf("Reached create with output: %+v\n", output)
 
 	if err != nil {
 		return sdkdiag.AppendErrorf(diags, "creating EMR Instance Fleet: %s", err)
@@ -253,6 +286,8 @@ func resourceInstanceFleetRead(ctx context.Context, d *schema.ResourceData, meta
 	conn := meta.(*conns.AWSClient).EMRConn(ctx)
 
 	fleet, err := FindInstanceFleetByTwoPartKey(ctx, conn, d.Get("cluster_id").(string), d.Id())
+
+	fmt.Printf("Reached read with input: %+v\n", fleet)
 
 	if !d.IsNewResource() && tfresource.NotFound(err) {
 		log.Printf("[WARN] EMR Instance Fleet (%s) not found, removing from state", d.Id())
@@ -393,5 +428,11 @@ func statusInstanceFleet(ctx context.Context, conn *emr.EMR, clusterID, fleetID 
 		}
 
 		return output, aws.StringValue(output.Status.State), nil
+	}
+}
+
+func suppressIfCapacityReservationOptionIs(t string) schema.SchemaDiffSuppressFunc {
+	return func(k, old, new string, d *schema.ResourceData) bool {
+		return old == "" && new == t
 	}
 }

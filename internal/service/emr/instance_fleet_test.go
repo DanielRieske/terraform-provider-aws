@@ -145,6 +145,37 @@ func TestAccEMRInstanceFleet_full(t *testing.T) {
 	})
 }
 
+func TestAccEMRInstanceFleet_OnDemandCapacityReservationOptions(t *testing.T) {
+	ctx := acctest.Context(t)
+	var fleet emr.InstanceFleet
+	rName := sdkacctest.RandomWithPrefix(acctest.ResourcePrefix)
+	resourceName := "aws_emr_instance_fleet.task"
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(ctx, t) },
+		ErrorCheck:               acctest.ErrorCheck(t, emr.EndpointsID),
+		ProtoV5ProviderFactories: acctest.ProtoV5ProviderFactories,
+		CheckDestroy:             acctest.CheckDestroyNoop,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccInstanceFleetConfig_OnDemandCapacityReservationOptions(rName),
+				Check:  resource.ComposeTestCheckFunc(testAccCheckInstanceFleetExists(ctx, resourceName, &fleet)), //resource.TestCheckResourceAttr(resourceName, "launch_specifications.#", "1"),
+				//resource.TestCheckResourceAttr(resourceName, "launch_specifications.0.on_demand_specification.%", "1"),
+				//resource.TestCheckResourceAttr(resourceName, "launch_specifications.0.on_demand_specification.0.capacity_reservation_options.%", "1"),
+				//resource.TestCheckResourceAttr(resourceName, "launch_specifications.0.on_demand_specification.0.capacity_reservation_options.0.capacity_reservation_preference", "none"),
+				//resource.TestCheckResourceAttr(resourceName, "launch_specifications.0.on_demand_specification.0.capacity_reservation_options.0.usage_strategy", "use-capacity-reservations-first"),
+
+			},
+			{
+				ResourceName:      resourceName,
+				ImportState:       true,
+				ImportStateIdFunc: testAccInstanceFleetResourceImportStateIdFunc(resourceName),
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
 func testAccCheckInstanceFleetExists(ctx context.Context, n string, v *emr.InstanceFleet) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		rs, ok := s.RootModule().Resources[n]
@@ -518,6 +549,33 @@ resource "aws_emr_instance_fleet" "task" {
       block_duration_minutes   = 0
       timeout_action           = "SWITCH_TO_ON_DEMAND"
       timeout_duration_minutes = 10
+    }
+  }
+
+  name                      = "emr_instance_fleet_%[1]s"
+  target_on_demand_capacity = 2
+  target_spot_capacity      = 2
+}
+`, rName))
+}
+
+func testAccInstanceFleetConfig_OnDemandCapacityReservationOptions(rName string) string {
+	return acctest.ConfigCompose(testAccInstanceFleetConfig_base(rName), fmt.Sprintf(`
+resource "aws_emr_instance_fleet" "task" {
+  cluster_id = aws_emr_cluster.test.id
+
+  instance_type_configs {
+    instance_type     = "m3.xlarge"
+    weighted_capacity = 1
+  }
+
+  launch_specifications {
+    on_demand_specification {
+      allocation_strategy = "lowest-price"
+
+      capacity_reservation_options {
+        capacity_reservation_preference = "open"
+      }
     }
   }
 
