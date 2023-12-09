@@ -63,6 +63,10 @@ func (p *servicePackage) SDKResources(ctx context.Context) []*types.ServicePacka
 			TypeName: "aws_ssoadmin_account_assignment",
 		},
 		{
+			Factory:  ResourceApplicationAuthenticationMethod,
+			TypeName: "aws_ssoadmin_application_authentication_method",
+		},
+		{
 			Factory:  ResourceCustomerManagedPolicyAttachment,
 			TypeName: "aws_ssoadmin_customer_managed_policy_attachment",
 		},

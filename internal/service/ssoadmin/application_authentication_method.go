@@ -17,6 +17,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/structure"
 	"github.com/hashicorp/terraform-provider-aws/internal/conns"
 	"github.com/hashicorp/terraform-provider-aws/internal/enum"
 	"github.com/hashicorp/terraform-provider-aws/internal/errs"
@@ -57,16 +58,22 @@ func ResourceApplicationAuthenticationMethod() *schema.Resource {
 					Schema: map[string]*schema.Schema{
 						"iam": {
 							Type:     schema.TypeList,
-							Required: true,
+							Optional: true,
 							ForceNew: true,
 							MaxItems: 1,
 							Elem: &schema.Resource{
 								Schema: map[string]*schema.Schema{
 									"actor_policy": {
-										Type:         schema.TypeString,
-										Required:     true,
-										ForceNew:     true,
-										ValidateFunc: verify.ValidIAMPolicyJSON,
+										Type:                  schema.TypeString,
+										Required:              true,
+										ForceNew:              true,
+										ValidateFunc:          verify.ValidIAMPolicyJSON,
+										DiffSuppressFunc:      verify.SuppressEquivalentPolicyDiffs,
+										DiffSuppressOnRefresh: true,
+										StateFunc: func(v interface{}) string {
+											json, _ := verify.LegacyPolicyNormalize(v)
+											return json
+										},
 									},
 								},
 							},
@@ -209,25 +216,28 @@ func FindApplicationAuthenticationMethodByMethodTypeAndApplicationARN(ctx contex
 }
 
 func expandAuthenticationMethod(tfMap []interface{}) *types.AuthenticationMethodMemberIam {
+	apiObject := types.AuthenticationMethodMemberIam{}
+
 	if len(tfMap) == 0 {
-		return nil
+		return &apiObject
+
 	}
 
 	tfList, ok := tfMap[0].(map[string]interface{})
 	if !ok {
-		return nil
+		return &apiObject
+
 	}
 
-	apiObject := types.AuthenticationMethodMemberIam{}
-
-	if v, ok := tfList["iam"]; ok {
-		tfList, ok := v.([]interface{})[0].(map[string]interface{})
+	if v, ok := tfList["iam"].([]interface{}); ok && len(v) > 0 {
+		tfList, ok := v[0].(map[string]interface{})
 		if !ok {
 			return nil
 		}
 
 		if v, ok := tfList["actor_policy"]; ok {
-			apiObject.Value.ActorPolicy = document.NewLazyDocument(v.(string))
+			policy, _ := structure.NormalizeJsonString(v.(string))
+			apiObject.Value.ActorPolicy = document.NewLazyDocument(policy)
 		}
 	}
 
@@ -239,10 +249,17 @@ func flattenAuthenticationMethod(apiObject types.AuthenticationMethod) []interfa
 		return nil
 	}
 
+	input := apiObject.(*types.AuthenticationMethodMemberIam)
+
 	tfMap := map[string]interface{}{}
-	// tfMap["iam"] = []interface{}{map[string]interface{}{
-	// 	"actor_policy": apiObject.Value.ActorPolicy.
-	// }}
+
+	if v := input.Value.ActorPolicy; v != nil {
+		actorPolicy, _ := v.MarshalSmithyDocument()
+
+		tfMap["iam"] = map[string]interface{}{
+			"actor_policy": string(actorPolicy),
+		}
+	}
 
 	return []interface{}{tfMap}
 }
