@@ -156,7 +156,7 @@ resource "aws_ssoadmin_application_authentication_method" "test" {
         Statement = [{
           Action = "sso-oauth:CreateTokenWithIAM",
           Principal = {
-            AWS = "arn:aws:iam::170689858638:root"
+            AWS = "arn:aws:iam::123456789012:root"
           }
           Effect   = "Allow"
           Resource = "*"
