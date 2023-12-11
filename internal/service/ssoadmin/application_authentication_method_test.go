@@ -139,6 +139,10 @@ func testAccApplicationAuthenticationMethodConfigBase(rName, authenticationMetho
 	return fmt.Sprintf(`
 data "aws_ssoadmin_instances" "test" {}
 
+data "aws_caller_identity" "current" {}
+
+data "aws_partition" "current" {}
+
 resource "aws_ssoadmin_application" "test" {
   name                     = %[1]q
   application_provider_arn = %[2]q
@@ -156,7 +160,7 @@ resource "aws_ssoadmin_application_authentication_method" "test" {
         Statement = [{
           Action = "sso-oauth:CreateTokenWithIAM",
           Principal = {
-            AWS = "arn:aws:iam::123456789012:root"
+            AWS = "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:root"
           }
           Effect   = "Allow"
           Resource = "*"
