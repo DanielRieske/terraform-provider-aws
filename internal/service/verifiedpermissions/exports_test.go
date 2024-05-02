@@ -9,11 +9,13 @@ var (
 	ResourcePolicyStore    = newResourcePolicyStore
 	ResourcePolicyTemplate = newResourcePolicyTemplate
 	ResourceSchema         = newResourceSchema
+	ResourceIdentitySource = newResourceIdentitySource
 
 	FindPolicyByID            = findPolicyByID
 	FindPolicyStoreByID       = findPolicyStoreByID
 	FindPolicyTemplateByID    = findPolicyTemplateByID
 	FindSchemaByPolicyStoreID = findSchemaByPolicyStoreID
+	FindIdentitySourceByID    = findIdentitySourceByID
 )
 
 var (
