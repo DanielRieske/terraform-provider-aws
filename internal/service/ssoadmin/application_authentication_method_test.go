@@ -14,7 +14,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/hashicorp/terraform-provider-aws/internal/acctest"
 	"github.com/hashicorp/terraform-provider-aws/internal/conns"
-	"github.com/hashicorp/terraform-provider-aws/internal/service/ssoadmin"
 	tfssoadmin "github.com/hashicorp/terraform-provider-aws/internal/service/ssoadmin"
 	"github.com/hashicorp/terraform-provider-aws/internal/tfresource"
 	"github.com/hashicorp/terraform-provider-aws/names"
@@ -65,7 +64,7 @@ func TestAccSSOAdminApplicationAuthenticationMethod_disappears(t *testing.T) {
 				Config: testAccApplicationAuthenticationMethodConfigBase(rName, string(types.AuthenticationMethodTypeIam)),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckApplicationAuthenticationMethodExists(ctx, resourceName),
-					acctest.CheckFrameworkResourceDisappears(ctx, acctest.Provider, tfssoadmin.ResourceApplicationAssignment, resourceName),
+					acctest.CheckFrameworkResourceDisappears(ctx, acctest.Provider, tfssoadmin.ResourceApplicationAuthenticationMethod, resourceName),
 				),
 				ExpectNonEmptyPlan: true,
 			},
@@ -82,12 +81,7 @@ func testAccCheckApplicationAuthenticationMethodExists(ctx context.Context, n st
 
 		conn := acctest.Provider.Meta().(*conns.AWSClient).SSOAdminClient(ctx)
 
-		applicationARN, authenticationMethodType, err := ssoadmin.ApplicationAuthenticationMethodParseResourceID(rs.Primary.ID)
-		if err != nil {
-			return err
-		}
-
-		_, err = ssoadmin.FindApplicationAuthenticationMethodByMethodTypeAndApplicationARN(ctx, conn, applicationARN, authenticationMethodType)
+		_, err := tfssoadmin.FindApplicationAuthenticationMethodByMethodTypeAndApplicationARN(ctx, conn, rs.Primary.ID)
 
 		return err
 	}
@@ -102,12 +96,7 @@ func testAccCheckApplicationAuthenticationMethodDestroy(ctx context.Context) res
 				continue
 			}
 
-			var applicationARN, authenticationMethodType, err = ssoadmin.ApplicationAuthenticationMethodParseResourceID(rs.Primary.ID)
-			if err != nil {
-				return err
-			}
-
-			_, err = ssoadmin.FindApplicationAuthenticationMethodByMethodTypeAndApplicationARN(ctx, conn, applicationARN, authenticationMethodType)
+			_, err := tfssoadmin.FindApplicationAuthenticationMethodByMethodTypeAndApplicationARN(ctx, conn, rs.Primary.ID)
 
 			if tfresource.NotFound(err) {
 				continue

@@ -57,6 +57,10 @@ func (p *servicePackage) FrameworkResources(ctx context.Context) []*types.Servic
 			Name:    "Application Assignment Configuration",
 		},
 		{
+			Factory: newResourceApplicationAuthenticationMethod,
+			Name:    "Application Authentication Method",
+		},
+		{
 			Factory: newResourceTrustedTokenIssuer,
 			Name:    "Trusted Token Issuer",
 			Tags:    &types.ServicePackageResourceTags{},
@@ -82,10 +86,6 @@ func (p *servicePackage) SDKResources(ctx context.Context) []*types.ServicePacka
 		{
 			Factory:  ResourceAccountAssignment,
 			TypeName: "aws_ssoadmin_account_assignment",
-		},
-		{
-			Factory:  ResourceApplicationAuthenticationMethod,
-			TypeName: "aws_ssoadmin_application_authentication_method",
 		},
 		{
 			Factory:  ResourceCustomerManagedPolicyAttachment,

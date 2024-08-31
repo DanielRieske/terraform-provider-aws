@@ -5,75 +5,96 @@ package ssoadmin
 
 import (
 	"context"
-	"fmt"
-	"log"
-	"strings"
-	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ssoadmin"
 	"github.com/aws/aws-sdk-go-v2/service/ssoadmin/document"
-	"github.com/aws/aws-sdk-go-v2/service/ssoadmin/types"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
+	awstypes "github.com/aws/aws-sdk-go-v2/service/ssoadmin/types"
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/structure"
-	"github.com/hashicorp/terraform-provider-aws/internal/conns"
+	"github.com/hashicorp/terraform-provider-aws/internal/create"
 	"github.com/hashicorp/terraform-provider-aws/internal/enum"
 	"github.com/hashicorp/terraform-provider-aws/internal/errs"
-	"github.com/hashicorp/terraform-provider-aws/internal/errs/sdkdiag"
+	intflex "github.com/hashicorp/terraform-provider-aws/internal/flex"
+	"github.com/hashicorp/terraform-provider-aws/internal/framework"
+	"github.com/hashicorp/terraform-provider-aws/internal/framework/flex"
+	fwtypes "github.com/hashicorp/terraform-provider-aws/internal/framework/types"
+	"github.com/hashicorp/terraform-provider-aws/internal/json"
 	"github.com/hashicorp/terraform-provider-aws/internal/tfresource"
-	"github.com/hashicorp/terraform-provider-aws/internal/verify"
+	"github.com/hashicorp/terraform-provider-aws/names"
 )
 
-// @SDKResource("aws_ssoadmin_application_authentication_method")
-func ResourceApplicationAuthenticationMethod() *schema.Resource {
-	return &schema.Resource{
-		CreateWithoutTimeout: resourceApplicationAuthenticationMethodCreate,
-		ReadWithoutTimeout:   resourceApplicationAuthenticationMethodRead,
-		DeleteWithoutTimeout: resourceApplicationAuthenticationMethodDelete,
+// @FrameworkResource(name="Application Authentication Method")
+func newResourceApplicationAuthenticationMethod(_ context.Context) (resource.ResourceWithConfigure, error) {
+	return &resourceApplicationAuthenticationMethod{}, nil
+}
 
-		Importer: &schema.ResourceImporter{
-			StateContext: schema.ImportStatePassthroughContext,
-		},
+const (
+	ResNameApplicationAuthenticationMethod = "Application Authentication Method"
 
-		Timeouts: &schema.ResourceTimeout{
-			Create: schema.DefaultTimeout(10 * time.Minute),
-			Delete: schema.DefaultTimeout(10 * time.Minute),
-		},
+	applicationAuthenticationMethodIDPartCount = 2
+)
 
-		Schema: map[string]*schema.Schema{
-			"application_arn": {
-				Type:         schema.TypeString,
-				Required:     true,
-				ForceNew:     true,
-				ValidateFunc: verify.ValidARN,
+type resourceApplicationAuthenticationMethod struct {
+	framework.ResourceWithConfigure
+}
+
+func (r *resourceApplicationAuthenticationMethod) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = "aws_ssoadmin_application_authentication_method"
+}
+
+func (r *resourceApplicationAuthenticationMethod) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = schema.Schema{
+		Attributes: map[string]schema.Attribute{
+			"application_arn": schema.StringAttribute{
+				CustomType: fwtypes.ARNType,
+				Required:   true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
-			"authentication_method": {
-				Type:     schema.TypeList,
+			"authentication_method_type": schema.StringAttribute{
 				Required: true,
-				ForceNew: true,
-				MaxItems: 1,
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"iam": {
-							Type:     schema.TypeList,
-							Optional: true,
-							ForceNew: true,
-							MaxItems: 1,
-							Elem: &schema.Resource{
-								Schema: map[string]*schema.Schema{
-									"actor_policy": {
-										Type:                  schema.TypeString,
-										Required:              true,
-										ForceNew:              true,
-										ValidateFunc:          verify.ValidIAMPolicyJSON,
-										DiffSuppressFunc:      verify.SuppressEquivalentPolicyDiffs,
-										DiffSuppressOnRefresh: true,
-										StateFunc: func(v interface{}) string {
-											json, _ := verify.LegacyPolicyNormalize(v)
-											return json
-										},
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.String{
+					enum.FrameworkValidate[awstypes.AuthenticationMethodType](),
+				},
+			},
+			names.AttrID: framework.IDAttribute(),
+		},
+		Blocks: map[string]schema.Block{
+			"authentication_method": schema.ListNestedBlock{
+				CustomType: fwtypes.NewListNestedObjectTypeOf[authenticationMethod](ctx),
+				PlanModifiers: []planmodifier.List{
+					listplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.List{
+					listvalidator.IsRequired(),
+					listvalidator.SizeAtMost(1),
+				},
+				NestedObject: schema.NestedBlockObject{
+					Blocks: map[string]schema.Block{
+						"iam": schema.ListNestedBlock{
+							CustomType: fwtypes.NewListNestedObjectTypeOf[iam](ctx),
+							Validators: []validator.List{
+								listvalidator.SizeAtMost(1),
+							},
+							NestedObject: schema.NestedBlockObject{
+								Attributes: map[string]schema.Attribute{
+									"actor_policy": schema.StringAttribute{
+										CustomType: fwtypes.NewSmithyJSONType(ctx, document.NewLazyDocument),
+										Required:   true,
 									},
 								},
 							},
@@ -81,123 +102,140 @@ func ResourceApplicationAuthenticationMethod() *schema.Resource {
 					},
 				},
 			},
-			"authentication_method_type": {
-				Type:             schema.TypeString,
-				Required:         true,
-				ForceNew:         true,
-				ValidateDiagFunc: enum.Validate[types.AuthenticationMethodType](),
-			},
 		},
 	}
 }
 
-func resourceApplicationAuthenticationMethodCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	var diags diag.Diagnostics
-	conn := meta.(*conns.AWSClient).SSOAdminClient(ctx)
+func (r *resourceApplicationAuthenticationMethod) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	conn := r.Meta().SSOAdminClient(ctx)
 
-	applicationARN := d.Get("application_arn").(string)
-	authenticationMethodType := d.Get("authentication_method_type").(string)
-	id := ApplicationAuthenticationMethodCreateResourceID(applicationARN, authenticationMethodType)
+	var plan resourceApplicationAuthenticationMethodData
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
-	input := &ssoadmin.PutApplicationAuthenticationMethodInput{
-		ApplicationArn:           aws.String(applicationARN),
-		AuthenticationMethod:     expandAuthenticationMethod(d.Get("authentication_method").([]interface{})),
-		AuthenticationMethodType: types.AuthenticationMethodType(authenticationMethodType),
+	input := &ssoadmin.PutApplicationAuthenticationMethodInput{}
+	resp.Diagnostics.Append(flex.Expand(ctx, plan, input)...)
+	if resp.Diagnostics.HasError() {
+		return
 	}
 
 	_, err := conn.PutApplicationAuthenticationMethod(ctx, input)
-
 	if err != nil {
-		return sdkdiag.AppendErrorf(diags, "creating SSO Application Authentication Method (%s): %s", id, err)
+		resp.Diagnostics.AddError(
+			create.ProblemStandardMessage(names.SSOAdmin, create.ErrActionCreating, ResNameApplicationAuthenticationMethod, plan.ApplicationARN.ValueString(), err),
+			err.Error(),
+		)
+		return
 	}
 
-	d.SetId(id)
+	idParts := []string{
+		plan.ApplicationARN.ValueString(),
+		plan.AuthenticationMethodType.ValueString(),
+	}
+	id, err := intflex.FlattenResourceId(idParts, applicationAuthenticationMethodIDPartCount, false)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			create.ProblemStandardMessage(names.SSOAdmin, create.ErrActionCreating, ResNameApplicationAuthenticationMethod, plan.ApplicationARN.String(), err),
+			err.Error(),
+		)
+		return
+	}
 
-	return append(diags, resourceApplicationAuthenticationMethodRead(ctx, d, meta)...)
+	plan.ID = types.StringValue(id)
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
-func resourceApplicationAuthenticationMethodRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	var diags diag.Diagnostics
-	conn := meta.(*conns.AWSClient).SSOAdminClient(ctx)
+func (r *resourceApplicationAuthenticationMethod) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	conn := r.Meta().SSOAdminClient(ctx)
 
-	applicationARN, authenticationMethodType, err := ApplicationAuthenticationMethodParseResourceID(d.Id())
+	var state resourceApplicationAuthenticationMethodData
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	output, err := findApplicationAuthenticationMethodByMethodTypeAndApplicationARN(ctx, conn, state.ID.ValueString())
+	if tfresource.NotFound(err) {
+		resp.State.RemoveResource(ctx)
+		return
+	}
 	if err != nil {
-		return sdkdiag.AppendFromErr(diags, err)
+		resp.Diagnostics.AddError(
+			create.ProblemStandardMessage(names.SSOAdmin, create.ErrActionSetting, ResNameApplicationAuthenticationMethod, state.ID.ValueString(), err),
+			err.Error(),
+		)
+		return
 	}
 
-	output, err := FindApplicationAuthenticationMethodByMethodTypeAndApplicationARN(ctx, conn, applicationARN, authenticationMethodType)
-
-	if !d.IsNewResource() && tfresource.NotFound(err) {
-		log.Printf("[WARN] SSO Application Authentication Method (%s) not found, removing from state", d.Id())
-		d.SetId("")
-		return diags
+	resp.Diagnostics.Append(flex.Flatten(ctx, output, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
 	}
 
-	if err != nil {
-		return sdkdiag.AppendErrorf(diags, "reading SSO Application Authentication Method (%s): %s", d.Id(), err)
-	}
-
-	d.Set("application_arn", applicationARN)
-	d.Set("authentication_method", flattenAuthenticationMethod(output.AuthenticationMethod))
-	d.Set("authentication_method_type", authenticationMethodType)
-
-	return diags
+	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
-func resourceApplicationAuthenticationMethodDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	var diags diag.Diagnostics
-	conn := meta.(*conns.AWSClient).SSOAdminClient(ctx)
+func (r *resourceApplicationAuthenticationMethod) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	// Np-op update
+}
 
-	applicationARN, authenticationMethodType, err := ApplicationAuthenticationMethodParseResourceID(d.Id())
+func (r *resourceApplicationAuthenticationMethod) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	conn := r.Meta().SSOAdminClient(ctx)
+
+	var state resourceApplicationAuthenticationMethodData
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	parts, err := intflex.ExpandResourceId(state.ID.ValueString(), applicationAuthenticationMethodIDPartCount, false)
 	if err != nil {
-		return sdkdiag.AppendFromErr(diags, err)
+		resp.Diagnostics.AddError(
+			create.ProblemStandardMessage(names.SSOAdmin, create.ErrActionDeleting, ResNameApplicationAuthenticationMethod, state.ID.ValueString(), err),
+			err.Error(),
+		)
+		return
 	}
 
-	log.Printf("[INFO] Deleting SSO Application Authentication Method: %s", d.Id())
-	_, err = conn.DeleteApplicationAuthenticationMethod(ctx, &ssoadmin.DeleteApplicationAuthenticationMethodInput{
-		ApplicationArn:           aws.String(applicationARN),
-		AuthenticationMethodType: types.AuthenticationMethodType(authenticationMethodType),
-	})
-
-	if errs.IsA[*types.ResourceNotFoundException](err) {
-		return diags
+	input := &ssoadmin.DeleteApplicationAuthenticationMethodInput{
+		ApplicationArn:           aws.String(parts[0]),
+		AuthenticationMethodType: awstypes.AuthenticationMethodType(parts[1]),
 	}
 
+	_, err = conn.DeleteApplicationAuthenticationMethod(ctx, input)
 	if err != nil {
-		return sdkdiag.AppendErrorf(diags, "deleting SSO Application Authentication Method (%s): %s", d.Id(), err)
+		if errs.IsA[*awstypes.ResourceNotFoundException](err) {
+			return
+		}
+		resp.Diagnostics.AddError(
+			create.ProblemStandardMessage(names.SSOAdmin, create.ErrActionDeleting, ResNameTrustedTokenIssuer, state.ID.String(), err),
+			err.Error(),
+		)
+		return
+	}
+}
+
+func (r *resourceApplicationAuthenticationMethod) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	resource.ImportStatePassthroughID(ctx, path.Root(names.AttrID), req, resp)
+}
+
+func findApplicationAuthenticationMethodByMethodTypeAndApplicationARN(ctx context.Context, conn *ssoadmin.Client, id string) (*awstypes.AuthenticationMethod, error) {
+	parts, err := intflex.ExpandResourceId(id, applicationAuthenticationMethodIDPartCount, false)
+	if err != nil {
+		return nil, err
 	}
 
-	return diags
-}
-
-const applicationAuthenticationMethodIDSeparator = ","
-
-func ApplicationAuthenticationMethodCreateResourceID(applicationARN, scope string) string {
-	parts := []string{applicationARN, scope}
-	id := strings.Join(parts, applicationAuthenticationMethodIDSeparator)
-
-	return id
-}
-
-func ApplicationAuthenticationMethodParseResourceID(id string) (string, string, error) {
-	parts := strings.Split(id, applicationAuthenticationMethodIDSeparator)
-
-	if len(parts) == 2 && parts[0] != "" && parts[1] != "" {
-		return parts[0], parts[1], nil
-	}
-
-	return "", "", fmt.Errorf("unexpected format for ID (%[1]s), expected APPLICATION_ARN%[2]sAUTHENTICATION_METHOD_TYPE", id, applicationAuthenticationMethodIDSeparator)
-}
-
-func FindApplicationAuthenticationMethodByMethodTypeAndApplicationARN(ctx context.Context, conn *ssoadmin.Client, applicationARN, authenticationMethodType string) (*ssoadmin.GetApplicationAuthenticationMethodOutput, error) {
 	input := &ssoadmin.GetApplicationAuthenticationMethodInput{
-		ApplicationArn:           aws.String(applicationARN),
-		AuthenticationMethodType: types.AuthenticationMethodType(authenticationMethodType),
+		ApplicationArn:           aws.String(parts[0]),
+		AuthenticationMethodType: awstypes.AuthenticationMethodType(parts[1]),
 	}
 
 	output, err := conn.GetApplicationAuthenticationMethod(ctx, input)
 
-	if errs.IsA[*types.ResourceNotFoundException](err) {
+	if errs.IsA[*awstypes.ResourceNotFoundException](err) {
 		return nil, &retry.NotFoundError{
 			LastError:   err,
 			LastRequest: input,
@@ -212,54 +250,73 @@ func FindApplicationAuthenticationMethodByMethodTypeAndApplicationARN(ctx contex
 		return nil, tfresource.NewEmptyResultError(input)
 	}
 
-	return output, nil
+	return &output.AuthenticationMethod, nil
 }
 
-func expandAuthenticationMethod(tfMap []interface{}) *types.AuthenticationMethodMemberIam {
-	apiObject := types.AuthenticationMethodMemberIam{}
+var (
+	_ flex.Expander = authenticationMethod{}
+	//_ flex.Flattener = &authenticationMethod{}
+	_ flex.Expander = iam{}
+)
 
-	if len(tfMap) == 0 {
-		return &apiObject
-
-	}
-
-	tfList, ok := tfMap[0].(map[string]interface{})
-	if !ok {
-		return &apiObject
-
-	}
-
-	if v, ok := tfList["iam"].([]interface{}); ok && len(v) > 0 {
-		tfList, ok := v[0].(map[string]interface{})
-		if !ok {
-			return nil
+func (m authenticationMethod) Expand(ctx context.Context) (result any, diags diag.Diagnostics) {
+	switch {
+	case !m.IAM.IsNull():
+		var result awstypes.AuthenticationMethodMemberIam
+		diags.Append(flex.Expand(ctx, m.IAM, &result.Value)...)
+		if diags.HasError() {
+			return nil, diags
 		}
-
-		if v, ok := tfList["actor_policy"]; ok {
-			policy, _ := structure.NormalizeJsonString(v.(string))
-			apiObject.Value.ActorPolicy = document.NewLazyDocument(policy)
-		}
+		return &result, diags
 	}
 
-	return &apiObject
+	return nil, diags
 }
 
-func flattenAuthenticationMethod(apiObject types.AuthenticationMethod) []interface{} {
-	if apiObject == nil {
-		return nil
+func (m iam) Expand(ctx context.Context) (result any, diags diag.Diagnostics) {
+	if m.ActorPolicy.IsNull() {
+		return nil, diags
 	}
 
-	input := apiObject.(*types.AuthenticationMethodMemberIam)
-
-	tfMap := map[string]interface{}{}
-
-	if v := input.Value.ActorPolicy; v != nil {
-		actorPolicy, _ := v.MarshalSmithyDocument()
-
-		tfMap["iam"] = map[string]interface{}{
-			"actor_policy": string(actorPolicy),
-		}
+	document, err := json.SmithyDocumentFromString(m.ActorPolicy.ValueString(), document.NewLazyDocument)
+	if err != nil {
+		return nil, diags
 	}
 
-	return []interface{}{tfMap}
+	return &awstypes.IamAuthenticationMethod{
+		ActorPolicy: document,
+	}, diags
+}
+
+// func (m *authenticationMethod) Flatten(ctx context.Context, v any) (diags diag.Diagnostics) {
+// 	switch t := v.(type) {
+// 	case awstypes.AuthenticationMethodMemberIam:
+// 		var model iam
+// 		d := fwflex.Flatten(ctx, t.Value, &model)
+// 		diags.Append(d...)
+// 		if diags.HasError() {
+// 			return diags
+// 		}
+
+// 		m.IAM = fwtypes.NewListNestedObjectValueOfPtrMust(ctx, &model)
+
+// 		return diags
+// 	}
+
+// 	return diags
+// }
+
+type resourceApplicationAuthenticationMethodData struct {
+	ApplicationARN           fwtypes.ARN                                           `tfsdk:"application_arn"`
+	AuthenticationMethod     fwtypes.ListNestedObjectValueOf[authenticationMethod] `tfsdk:"authentication_method"`
+	AuthenticationMethodType types.String                                          `tfsdk:"authentication_method_type"`
+	ID                       types.String                                          `tfsdk:"id"`
+}
+
+type authenticationMethod struct {
+	IAM fwtypes.ListNestedObjectValueOf[iam] `tfsdk:"iam"`
+}
+
+type iam struct {
+	ActorPolicy fwtypes.SmithyJSON[document.Interface] `tfsdk:"actor_policy"`
 }

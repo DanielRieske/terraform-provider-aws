@@ -6,14 +6,16 @@ package ssoadmin
 // Exports for use in tests only.
 var (
 	ResourceApplication                        = newResourceApplication
+	ResourceApplicationAccessScope             = newResourceApplicationAccessScope
 	ResourceApplicationAssignment              = newResourceApplicationAssignment
 	ResourceApplicationAssignmentConfiguration = newResourceApplicationAssignmentConfiguration
-	ResourceApplicationAccessScope             = newResourceApplicationAccessScope
+	ResourceApplicationAuthenticationMethod    = newResourceApplicationAuthenticationMethod
 	ResourceTrustedTokenIssuer                 = newResourceTrustedTokenIssuer
 
-	FindApplicationByID                        = findApplicationByID
-	FindApplicationAssignmentByID              = findApplicationAssignmentByID
-	FindApplicationAssignmentConfigurationByID = findApplicationAssignmentConfigurationByID
-	FindApplicationAccessScopeByID             = findApplicationAccessScopeByID
-	FindTrustedTokenIssuerByARN                = findTrustedTokenIssuerByARN
+	FindApplicationByID                                              = findApplicationByID
+	FindApplicationAccessScopeByID                                   = findApplicationAccessScopeByID
+	FindApplicationAssignmentByID                                    = findApplicationAssignmentByID
+	FindApplicationAssignmentConfigurationByID                       = findApplicationAssignmentConfigurationByID
+	FindApplicationAuthenticationMethodByMethodTypeAndApplicationARN = findApplicationAuthenticationMethodByMethodTypeAndApplicationARN
+	FindTrustedTokenIssuerByARN                                      = findTrustedTokenIssuerByARN
 )
